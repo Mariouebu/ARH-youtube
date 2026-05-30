@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ミニYouTube</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f9f9f9; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .upload-box { background: #fff; padding: 15px; border-radius: 5px; box-shadow: 0 0 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .video-card { background: #fff; border-radius: 5px; overflow: hidden; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+        video { width: 100%; height: auto; aspect-ratio: 16/9; background: #000; }
+        .video-info { padding: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>ミニYouTube 📺</h1>
+    </header>
+
+    <main>
+        <section class="upload-box">
+            <h3>新しく動画を投稿する</h3>
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="video" accept="video/*" required>
+                <button type="submit">アップロード</button>
+            </form>
+        </section>
+
+        <h2>投稿された動画</h2>
+        <div class="video-grid">
+            <% if (videos.length === 0) { %>
+                <p>まだ動画がありません。上のフォームから投稿してください！</p>
+            <% } %>
+            <% videos.forEach(video => { %>
+                <div class="video-card">
+                    <video src="/uploads/<%= video %>" controls></video>
+                    <div class="video-info">
+                        <p><strong>ファイル名:</strong> <%= video %></p>
+                    </div>
+                </div>
+            <% }) %>
+        </div>
+    </main>
+
+</body>
+</html>
