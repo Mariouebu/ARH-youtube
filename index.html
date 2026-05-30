@@ -1,0 +1,1923 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeTube - 動画共有プラットフォーム</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        yt: {
+                            red: '#FF0000',
+                            dark: '#0f0f0f',
+                            card: '#1f1f1f',
+                            hover: '#272727',
+                            border: '#3f3f3f',
+                            text: '#f1f1f1',
+                            muted: '#aaaaaa'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Vue.js (CDN) -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* スムーズなスクロールバーのカスタマイズ */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: #0f0f0f;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #3f3f3f;
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: #555555;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+        /* アニメーション */
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 3s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-yt-dark dark:text-yt-text transition-colors duration-200 overflow-x-hidden min-h-screen">
+    <div id="app" class="flex flex-col min-h-screen" v-cloak>
+
+        <!-- ヘッダーエリア -->
+        <header class="sticky top-0 z-40 flex items-center justify-between px-4 py-2.5 bg-white dark:bg-yt-dark border-b border-gray-200 dark:border-yt-border/50 h-14">
+            <!-- 左側: メニューとロゴ -->
+            <div class="flex items-center space-x-4">
+                <button @click="toggleSidebar" class="p-2 hover:bg-gray-100 dark:hover:bg-yt-hover rounded-full transition-colors hidden md:block">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+                <div @click="goHome" class="flex items-center space-x-1 cursor-pointer select-none">
+                    <div class="relative flex items-center justify-center bg-red-600 text-white rounded-xl w-9 h-7 text-center">
+                        <i class="fa-solid fa-play text-sm"></i>
+                    </div>
+                    <span class="text-xl font-bold tracking-tighter flex items-center">
+                        WeTube<span class="text-xs text-red-500 font-normal align-super ml-0.5">JP</span>
+                    </span>
+                </div>
+                <!-- 現在の権限バッジ -->
+                <span :class="[
+                    'text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider hidden sm:inline-block',
+                    currentUserRole === 'admin' ? 'bg-red-500 text-white animate-pulse' :
+                    currentUserRole === 'creator' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400'
+                ]">
+                    {{ currentUserRole === 'admin' ? '管理者' : currentUserRole === 'creator' ? 'クリエイター' : 'デモ一般' }}
+                </span>
+            </div>
+
+            <!-- 中央: 検索バー -->
+            <div class="flex-1 max-w-2xl mx-4 hidden sm:block">
+                <form @submit.prevent="executeSearch" class="flex w-full">
+                    <div class="relative flex-1">
+                        <input 
+                            v-model="searchQuery" 
+                            type="text" 
+                            placeholder="検索" 
+                            class="w-full bg-gray-50 dark:bg-zinc-900 text-sm border border-gray-300 dark:border-zinc-700 rounded-l-full py-2 pl-4 pr-10 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all dark:focus:border-blue-500"
+                        >
+                        <button 
+                            v-if="searchQuery" 
+                            type="button" 
+                            @click="searchQuery = ''; executeSearch()" 
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-white"
+                        >
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <button type="submit" class="bg-gray-100 dark:bg-zinc-800 border-y border-r border-gray-300 dark:border-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-700 px-6 rounded-r-full transition-colors flex items-center justify-center">
+                        <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                    </button>
+                </form>
+            </div>
+
+            <!-- 右側: アクション、テーマ、プロフィール -->
+            <div class="flex items-center space-x-2 md:space-x-3">
+                <!-- モバイル用検索ボタン -->
+                <button @click="toggleMobileSearch" class="sm:hidden p-2.5 hover:bg-gray-100 dark:hover:bg-yt-hover rounded-full">
+                    <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                </button>
+
+                <!-- ログイン/切り替えボタン（目立たせる） -->
+                <button @click="openLoginModal" class="flex items-center space-x-1.5 bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all shadow">
+                    <i class="fa-solid fa-user-gear"></i>
+                    <span>ログイン切替</span>
+                </button>
+
+                <!-- アップロードボタン -->
+                <button @click="openUploadModal" class="flex items-center space-x-2 bg-gray-100 dark:bg-yt-hover hover:bg-gray-200 dark:hover:bg-zinc-700 px-3 py-1.5 rounded-full text-sm font-medium transition-colors">
+                    <i class="fa-solid fa-plus text-sm"></i>
+                    <span class="hidden md:inline">作成</span>
+                </button>
+
+                <!-- 通知ベル -->
+                <div class="relative">
+                    <button @click="toggleNotifications" class="p-2.5 hover:bg-gray-100 dark:hover:bg-yt-hover rounded-full relative transition-colors">
+                        <i class="fa-regular fa-bell text-lg"></i>
+                        <span v-if="unreadNotifications" class="absolute top-1 right-1 bg-red-600 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+                            {{ unreadNotifications }}
+                        </span>
+                    </button>
+                    <!-- 通知ドロップダウン -->
+                    <div v-if="showNotifications" class="absolute right-0 mt-2 w-80 bg-white dark:bg-yt-card border border-gray-200 dark:border-yt-border rounded-xl shadow-2xl py-2 z-50 overflow-hidden">
+                        <div class="px-4 py-2 border-b border-gray-100 dark:border-yt-border font-semibold text-sm flex justify-between items-center">
+                            <span>通知</span>
+                            <button @click="clearNotifications" class="text-xs text-blue-500 hover:text-blue-600">すべて既読</button>
+                        </div>
+                        <div class="max-h-80 overflow-y-auto">
+                            <div v-for="notif in notifications" :key="notif.id" class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-yt-hover border-b border-gray-50 dark:border-yt-border/50 flex space-x-3 text-sm cursor-pointer">
+                                <img :src="notif.avatar" class="w-9 h-9 rounded-full object-cover">
+                                <div class="flex-1">
+                                    <p class="text-xs text-gray-500 dark:text-yt-muted">{{ notif.time }}</p>
+                                    <p class="font-medium text-gray-800 dark:text-yt-text">{{ notif.text }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ダークモード切り替え -->
+                <button @click="toggleTheme" class="p-2.5 hover:bg-gray-100 dark:hover:bg-yt-hover rounded-full transition-colors">
+                    <i v-if="darkMode" class="fa-solid fa-sun text-lg text-amber-500"></i>
+                    <i v-else class="fa-regular fa-moon text-lg"></i>
+                </button>
+
+                <!-- プロフィールアバター -->
+                <div class="relative">
+                    <button @click="toggleProfileMenu" class="flex items-center focus:outline-none">
+                        <img :src="userAvatar" alt="Avatar" class="w-8 h-8 rounded-full ring-2 ring-red-500 hover:opacity-95 transition-opacity object-cover">
+                    </button>
+                    <!-- プロフィールメニュー -->
+                    <div v-if="showProfileMenu" class="absolute right-0 mt-2 w-56 bg-white dark:bg-yt-card border border-gray-200 dark:border-yt-border rounded-xl shadow-2xl py-2 z-50 text-sm">
+                        <div class="px-4 py-3 border-b border-gray-100 dark:border-yt-border">
+                            <p class="font-bold">{{ currentUserName }}</p>
+                            <p class="text-xs text-gray-500 dark:text-yt-muted">{{ currentUserEmail }}</p>
+                        </div>
+                        <a href="#" @click.prevent="handleMyChannelClick" class="block px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-yt-hover flex items-center space-x-3">
+                            <i class="fa-regular fa-user text-base w-5 text-gray-500"></i>
+                            <span v-if="userChannel">マイチャンネル ({{ userChannel.name }})</span>
+                            <span v-else>チャンネルを作成</span>
+                        </a>
+                        <a v-if="currentUserRole === 'admin'" href="#" @click.prevent="selectMenu('admin_dashboard')" class="block px-4 py-2.5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/40 flex items-center space-x-3 font-semibold">
+                            <i class="fa-solid fa-shield-halved text-base w-5"></i>
+                            <span>管理者ダッシュボード</span>
+                        </a>
+                        <a href="#" @click.prevent="openUploadModal" class="block px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-yt-hover flex items-center space-x-3">
+                            <i class="fa-solid fa-video text-base w-5 text-gray-500"></i>
+                            <span>動画を投稿</span>
+                        </a>
+                        <a href="#" @click.prevent="logoutDemo" class="block px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-yt-hover flex items-center space-x-3 text-red-500">
+                            <i class="fa-solid fa-sign-out-alt text-base w-5"></i>
+                            <span>ログアウト</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- モバイル用検索バー (表示切り替え) -->
+        <div v-if="showMobileSearch" class="sm:hidden bg-white dark:bg-yt-dark px-4 py-2 border-b border-gray-200 dark:border-yt-border flex items-center space-x-2">
+            <form @submit.prevent="executeSearch" class="flex flex-1">
+                <input 
+                    v-model="searchQuery" 
+                    type="text" 
+                    placeholder="検索" 
+                    class="w-full bg-gray-50 dark:bg-zinc-900 text-sm border border-gray-300 dark:border-zinc-700 rounded-l-full py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-500"
+                >
+                <button type="submit" class="bg-gray-100 dark:bg-zinc-800 border-y border-r border-gray-300 dark:border-zinc-700 px-4 rounded-r-full flex items-center justify-center">
+                    <i class="fa-solid fa-magnifying-glass text-sm"></i>
+                </button>
+            </form>
+            <button @click="showMobileSearch = false" class="text-sm px-2 text-gray-500">キャンセル</button>
+        </div>
+
+        <!-- メインコンテナ -->
+        <div class="flex flex-1 relative overflow-hidden">
+            
+            <!-- サイドバー (PC向け常時、またはドロワー) -->
+            <aside 
+                :class="[
+                    sidebarOpen ? 'w-60' : 'w-0 md:w-16',
+                    'bg-white dark:bg-yt-dark border-r border-gray-200 dark:border-yt-border/50 transition-all duration-300 flex-shrink-0 z-30 flex flex-col',
+                    'fixed md:sticky top-14 h-[calc(100vh-3.5rem)]'
+                ]"
+            >
+                <div class="flex-1 overflow-y-auto py-3 space-y-1" :class="{'px-2': sidebarOpen, 'px-1': !sidebarOpen}">
+                    <!-- メインナビ -->
+                    <button @click="goHome" :class="['w-full flex items-center rounded-xl px-3 py-2.5 transition-colors text-left', activeMenu === 'home' ? 'bg-gray-100 dark:bg-yt-hover font-medium' : 'hover:bg-gray-50 dark:hover:bg-yt-hover/50']">
+                        <i class="fa-solid fa-house text-lg w-7" :class="activeMenu === 'home' ? 'text-red-500' : ''"></i>
+                        <span v-if="sidebarOpen" class="text-sm">ホーム</span>
+                    </button>
+
+                    <!-- 管理者専用メニュー (常に表示してデモ体験可能に) -->
+                    <button @click="selectMenu('admin_dashboard')" :class="['w-full flex items-center rounded-xl px-3 py-2.5 transition-colors text-left', activeMenu === 'admin_dashboard' ? 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 font-bold border border-red-200 dark:border-red-900/50' : 'hover:bg-gray-50 dark:hover:bg-yt-hover/50']">
+                        <i class="fa-solid fa-shield-halved text-lg w-7" :class="activeMenu === 'admin_dashboard' ? 'text-red-500' : 'text-red-400 dark:text-red-500'"></i>
+                        <span v-if="sidebarOpen" class="text-sm">管理ダッシュボード</span>
+                        <span v-if="sidebarOpen" class="ml-auto bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-200 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">Admin</span>
+                    </button>
+
+                    <button @click="selectMenu('shorts')" :class="['w-full flex items-center rounded-xl px-3 py-2.5 transition-colors text-left', activeMenu === 'shorts' ? 'bg-gray-100 dark:bg-yt-hover font-medium' : 'hover:bg-gray-50 dark:hover:bg-yt-hover/50']">
+                        <i class="fa-solid fa-bolt text-lg w-7" :class="activeMenu === 'shorts' ? 'text-amber-500' : ''"></i>
+                        <span v-if="sidebarOpen" class="text-sm">Shorts</span>
+                    </button>
+
+                    <button @click="selectMenu('subs')" :class="['w-full flex items-center rounded-xl px-3 py-2.5 transition-colors text-left', activeMenu === 'subs' ? 'bg-gray-100 dark:bg-yt-hover font-medium' : 'hover:bg-gray-50 dark:hover:bg-yt-hover/50']">
+                        <i class="fa-regular fa-rectangle-list text-lg w-7"></i>
+                        <span v-if="sidebarOpen" class="text-sm">登録チャンネル</span>
+                    </button>
+
+                    <hr class="border-gray-200 dark:border-yt-border/40 my-3" v-if="sidebarOpen">
+
+                    <!-- ライブラリ/保存リスト -->
+                    <div v-if="sidebarOpen" class="px-3 py-1 text-xs font-bold text-gray-400 dark:text-yt-muted uppercase tracking-wider">ライブラリ</div>
+
+                    <button @click="selectMenu('history')" :class="['w-full flex items-center rounded-xl px-3 py-2.5 transition-colors text-left', activeMenu === 'history' ? 'bg-gray-100 dark:bg-yt-hover font-medium' : 'hover:bg-gray-50 dark:hover:bg-yt-hover/50']">
+                        <i class="fa-solid fa-clock-rotate-left text-lg w-7"></i>
+                        <span v-if="sidebarOpen" class="text-sm">履歴</span>
+                    </button>
+
+                    <button @click="selectMenu('favorites')" :class="['w-full flex items-center rounded-xl px-3 py-2.5 transition-colors text-left', activeMenu === 'favorites' ? 'bg-gray-100 dark:bg-yt-hover font-medium' : 'hover:bg-gray-50 dark:hover:bg-yt-hover/50']">
+                        <i class="fa-regular fa-heart text-lg w-7"></i>
+                        <span v-if="sidebarOpen" class="text-sm">お気に入り</span>
+                    </button>
+
+                    <button @click="selectMenu('watch-later')" :class="['w-full flex items-center rounded-xl px-3 py-2.5 transition-colors text-left', activeMenu === 'watch-later' ? 'bg-gray-100 dark:bg-yt-hover font-medium' : 'hover:bg-gray-50 dark:hover:bg-yt-hover/50']">
+                        <i class="fa-regular fa-clock text-lg w-7"></i>
+                        <span v-if="sidebarOpen" class="text-sm">後で見る</span>
+                    </button>
+
+                    <!-- 登録中のチャンネル (サイドバー開閉時) -->
+                    <div v-if="sidebarOpen">
+                        <hr class="border-gray-200 dark:border-yt-border/40 my-3">
+                        <div class="px-3 py-1 text-xs font-bold text-gray-400 dark:text-yt-muted uppercase tracking-wider">登録チャンネル</div>
+                        <div v-for="channel in subscribedChannels" :key="channel.name" class="flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-yt-hover/50 cursor-pointer mt-1">
+                            <img :src="channel.avatar" class="w-6 h-6 rounded-full object-cover">
+                            <span class="text-sm truncate flex-1">{{ channel.name }}</span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500" v-if="channel.hasUpdate"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- サイドバーフッター -->
+                <div v-if="sidebarOpen" class="p-4 border-t border-gray-100 dark:border-yt-border/30 text-[10px] text-gray-400 dark:text-yt-muted space-y-1">
+                    <p>© 2026 WeTube LLC</p>
+                    <p>管理監視・ログイン対応デモ</p>
+                </div>
+            </aside>
+
+            <!-- メインコンテンツ領域 -->
+            <main class="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#030303] flex flex-col">
+                
+                <!-- ホーム画面/動画一覧 -->
+                <div v-if="currentView === 'feed'" class="flex-1 p-4 md:p-6">
+                    
+                    <!-- カテゴリチップス -->
+                    <div class="flex items-center space-x-2 overflow-x-auto pb-4 mb-4 whitespace-nowrap scrollbar-none">
+                        <button 
+                            v-for="cat in categories" 
+                            :key="cat"
+                            @click="selectCategory(cat)"
+                            :class="[
+                                'px-3.5 py-1.5 rounded-lg text-sm transition-all font-medium duration-150',
+                                selectedCategory === cat 
+                                    ? 'bg-black text-white dark:bg-white dark:text-black font-semibold' 
+                                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-yt-hover dark:hover:bg-zinc-700 text-gray-800 dark:text-yt-text'
+                            ]"
+                        >
+                            {{ cat }}
+                        </button>
+                    </div>
+
+                    <!-- 検索結果、カテゴリによるフィルタリング状態表示 -->
+                    <div v-if="activeSearchQuery || selectedCategory !== 'すべて'" class="mb-5 flex items-center justify-between">
+                        <p class="text-sm text-gray-500 dark:text-yt-muted">
+                            検索条件: <span class="font-semibold text-gray-900 dark:text-white" v-if="activeSearchQuery">「{{ activeSearchQuery }}」</span>
+                            <span class="font-semibold text-gray-900 dark:text-white" v-if="selectedCategory !== 'すべて'">カテゴリ: {{ selectedCategory }}</span>
+                            の検索結果 ({{ filteredVideos.length }}件)
+                        </p>
+                        <button @click="resetFilters" class="text-xs text-red-500 font-semibold hover:underline">クリアする</button>
+                    </div>
+
+                    <!-- 動画グリッド -->
+                    <div v-if="filteredVideos.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+                        <div 
+                            v-for="video in filteredVideos" 
+                            :key="video.id" 
+                            class="group cursor-pointer flex flex-col space-y-2 relative"
+                            @click="playVideo(video)"
+                        >
+                            <!-- サムネイル -->
+                            <div class="relative aspect-video rounded-xl overflow-hidden bg-gray-200 dark:bg-yt-card">
+                                <img 
+                                    :src="video.thumbnail" 
+                                    @error="video.thumbnail = 'https://placehold.co/640x360/222/fff?text=No+Image'"
+                                    class="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                                >
+                                <span class="absolute bottom-2 right-2 bg-black/85 text-white text-[11px] font-bold px-1.5 py-0.5 rounded">
+                                    {{ video.duration }}
+                                </span>
+                            </div>
+
+                            <!-- ビデオ詳細 -->
+                            <div class="flex space-x-3 px-1">
+                                <img :src="video.channelAvatar" class="w-9 h-9 rounded-full object-cover flex-shrink-0">
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-semibold text-sm line-clamp-2 text-gray-900 dark:text-yt-text group-hover:text-red-500 transition-colors leading-tight">
+                                        {{ video.title }}
+                                    </h4>
+                                    <p class="text-xs text-gray-500 dark:text-yt-muted mt-1 hover:text-gray-900 dark:hover:text-white truncate flex items-center">
+                                        <span class="truncate">{{ video.channelName }}</span>
+                                        <i class="fa-solid fa-circle-check text-[10px] text-gray-400 ml-1" v-if="video.verified"></i>
+                                    </p>
+                                    <p class="text-xs text-gray-500 dark:text-yt-muted mt-0.5">
+                                        {{ formatViews(video.views) }}回視聴 • {{ video.uploadedAt }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ヒットしない場合の表示 -->
+                    <div v-else class="flex flex-col items-center justify-center py-20 text-center">
+                        <i class="fa-solid fa-video-slash text-5xl text-gray-300 dark:text-yt-border mb-4"></i>
+                        <h3 class="text-lg font-semibold">該当する動画が見つかりませんでした</h3>
+                        <p class="text-sm text-gray-500 dark:text-yt-muted mt-1">BANされたチャンネル、削除された動画、またはフィルター外のコンテンツです。</p>
+                        <button @click="resetFilters" class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-medium transition-colors">
+                            すべての動画を表示
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 【新規】システム管理者ダッシュボード画面 -->
+                <div v-if="currentView === 'admin_dashboard'" class="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-yt-border/50 pb-5">
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="bg-red-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Live Secure</span>
+                                <h1 class="text-2xl font-black text-gray-900 dark:text-white tracking-tight">WeTube 統合セキュリティ＆管理コンソール</h1>
+                            </div>
+                            <p class="text-sm text-gray-500 dark:text-yt-muted mt-1">リアルタイム視聴監視、不適切コンテンツのBAN/削除、サービス監視を行います。</p>
+                        </div>
+                        <div class="flex items-center space-x-2 bg-white dark:bg-yt-card border border-gray-200 dark:border-yt-border p-2 rounded-xl text-xs">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                            <span class="font-bold">セキュリティコア稼働中 (UTC+9)</span>
+                        </div>
+                    </div>
+
+                    <!-- アナリティクス統計カウンター -->
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-white dark:bg-yt-card p-4 rounded-xl border border-gray-200 dark:border-yt-border">
+                            <p class="text-xs text-gray-500 dark:text-yt-muted font-bold">アクティブ監視ログ</p>
+                            <p class="text-2xl font-black mt-1 text-red-600 dark:text-red-500">{{ viewLogs.length }} 件</p>
+                            <div class="text-[10px] text-emerald-500 mt-1 font-semibold flex items-center">
+                                <i class="fa-solid fa-arrow-trend-up mr-1"></i>
+                                <span>1秒毎にオート更新中</span>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-yt-card p-4 rounded-xl border border-gray-200 dark:border-yt-border">
+                            <p class="text-xs text-gray-500 dark:text-yt-muted font-bold">登録ビデオ総数</p>
+                            <p class="text-2xl font-black mt-1">{{ videos.length }} 本</p>
+                            <span class="text-[10px] text-gray-400 dark:text-yt-muted">全カテゴリの登録総数</span>
+                        </div>
+                        <div class="bg-white dark:bg-yt-card p-4 rounded-xl border border-gray-200 dark:border-yt-border">
+                            <p class="text-xs text-gray-500 dark:text-yt-muted font-bold">規制チャンネル数 (BAN)</p>
+                            <p class="text-2xl font-black mt-1" :class="bannedChannels.length ? 'text-red-500' : 'text-gray-500'">
+                                {{ bannedChannels.length }} 件
+                            </p>
+                            <span class="text-[10px] text-gray-400 dark:text-yt-muted">ポリシー違反による強制凍結</span>
+                        </div>
+                        <div class="bg-white dark:bg-yt-card p-4 rounded-xl border border-gray-200 dark:border-yt-border">
+                            <p class="text-xs text-gray-500 dark:text-yt-muted font-bold">現在のロール</p>
+                            <p class="text-lg font-bold mt-1 text-blue-500 dark:text-blue-400 flex items-center space-x-1">
+                                <i class="fa-solid fa-user-shield"></i>
+                                <span class="capitalize">{{ currentUserRole }}</span>
+                            </p>
+                            <button @click="openLoginModal" class="text-[10px] text-red-500 hover:underline font-bold mt-1">変更する</button>
+                        </div>
+                    </div>
+
+                    <!-- 管理者警告バナー（一般ユーザーが管理者ダッシュボードを見ている場合） -->
+                    <div v-if="currentUserRole !== 'admin'" class="bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 p-4 rounded-xl flex items-start space-x-3 text-xs leading-relaxed">
+                        <i class="fa-solid fa-triangle-exclamation text-base mt-0.5"></i>
+                        <div>
+                            <span class="font-bold block">デモ体験中：あなたは管理者としてログインしていません</span>
+                            システム開発用のプレビューモードとして画面を表示しています。チャンネルの削除やBAN操作、ログの閲覧といった「管理者アクション」をお試しいただくには、右上の「ログイン切替」から **システム管理者(admin)** で再ログインしてください。
+                        </div>
+                    </div>
+
+                    <!-- ダッシュボード作業セクション -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- 左側・中央: 視聴状況監視ログ ＆ ビデオ一括管理 -->
+                        <div class="lg:col-span-2 space-y-6">
+                            
+                            <!-- リアルタイム視聴ログ -->
+                            <div class="bg-white dark:bg-yt-card rounded-2xl border border-gray-200 dark:border-yt-border shadow-md overflow-hidden">
+                                <div class="p-4 bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-yt-border flex justify-between items-center">
+                                    <h2 class="font-black text-sm flex items-center space-x-2">
+                                        <span class="flex h-2 w-2 relative">
+                                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                            <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                        </span>
+                                        <span>リアルタイム・アクティビティ監視モニター</span>
+                                    </h2>
+                                    <button @click="clearLogs" class="text-[11px] text-gray-500 dark:text-yt-muted hover:text-red-500 transition-colors font-bold">
+                                        ログ消去
+                                    </button>
+                                </div>
+                                <div class="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-yt-border/40 font-mono text-xs">
+                                    <div v-for="log in viewLogs" :key="log.id" class="p-3 hover:bg-gray-50 dark:hover:bg-yt-hover flex items-start space-x-3 transition-colors">
+                                        <div class="bg-gray-100 dark:bg-zinc-800 text-gray-500 text-[10px] py-0.5 px-2 rounded-md whitespace-nowrap">
+                                            {{ log.time }}
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="leading-relaxed text-gray-800 dark:text-gray-200">
+                                                <span class="font-bold text-blue-600 dark:text-blue-400">@{{ log.user }}</span>
+                                                が 
+                                                <span class="text-emerald-600 dark:text-emerald-400 font-semibold">{{ log.action }}</span> 
+                                                しました:
+                                                <span class="font-bold text-gray-900 dark:text-white block sm:inline italic">「{{ log.target }}」</span>
+                                            </p>
+                                            <p class="text-[10px] text-gray-400 dark:text-yt-muted mt-0.5">接続元情報 (仮想): {{ log.ip }}</p>
+                                        </div>
+                                    </div>
+                                    <div v-if="viewLogs.length === 0" class="p-8 text-center text-gray-400 dark:text-yt-muted">
+                                        現在アクティビティはありません。誰かが動画を見始めると記録されます。
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- コンテンツ管理（ビデオの強制削除） -->
+                            <div class="bg-white dark:bg-yt-card rounded-2xl border border-gray-200 dark:border-yt-border shadow-md overflow-hidden">
+                                <div class="p-4 bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-yt-border">
+                                    <h2 class="font-black text-sm flex items-center space-x-2">
+                                        <i class="fa-solid fa-clapperboard text-red-500"></i>
+                                        <span>ビデオ公開・削除一括管理</span>
+                                    </h2>
+                                </div>
+                                <div class="divide-y divide-gray-100 dark:divide-yt-border/40">
+                                    <div v-for="video in videos" :key="video.id" class="p-4 flex items-center justify-between gap-4 text-xs">
+                                        <div class="flex items-center space-x-3 min-w-0 flex-1">
+                                            <img :src="video.thumbnail" class="w-16 h-10 object-cover rounded-lg flex-shrink-0 bg-gray-100">
+                                            <div class="min-w-0 flex-1">
+                                                <p class="font-bold truncate text-gray-900 dark:text-yt-text">{{ video.title }}</p>
+                                                <p class="text-[10px] text-gray-500 dark:text-yt-muted truncate mt-0.5">
+                                                    投稿者: {{ video.channelName }} | カテゴリ: {{ video.category }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-2 flex-shrink-0">
+                                            <span v-if="video.deleted" class="bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-400 px-2 py-1 rounded font-bold">削除済み</span>
+                                            <button 
+                                                v-else 
+                                                @click="deleteVideoAdmin(video)"
+                                                class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold transition-all"
+                                                :disabled="currentUserRole !== 'admin'"
+                                                :class="{'opacity-55 cursor-not-allowed': currentUserRole !== 'admin'}"
+                                            >
+                                                <i class="fa-solid fa-trash-can mr-1"></i>強制削除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- 右側: チャンネルBAN/警告管理 -->
+                        <div class="space-y-6">
+                            <div class="bg-white dark:bg-yt-card rounded-2xl border border-gray-200 dark:border-yt-border shadow-md overflow-hidden">
+                                <div class="p-4 bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-yt-border">
+                                    <h2 class="font-black text-sm flex items-center space-x-2">
+                                        <i class="fa-solid fa-user-slash text-red-500"></i>
+                                        <span>危険チャンネルBAN管理</span>
+                                    </h2>
+                                </div>
+                                <div class="p-4 space-y-4">
+                                    <p class="text-xs text-gray-500 dark:text-yt-muted leading-relaxed">
+                                        特定のチャンネルを WeTube コミュニティからBAN（非公開化）できます。BANされたアカウントは動画フィードから強制排除されます。
+                                    </p>
+                                    
+                                    <!-- チャンネルリスト -->
+                                    <div class="space-y-3.5">
+                                        <div v-for="ch in allChannels" :key="ch.name" class="flex items-center justify-between border-b border-gray-100 dark:border-yt-border/40 pb-3 last:border-0 last:pb-0">
+                                            <div class="flex items-center space-x-2.5 min-w-0">
+                                                <img :src="ch.avatar" class="w-8 h-8 rounded-full object-cover">
+                                                <div class="min-w-0">
+                                                    <span class="font-bold text-xs block text-gray-900 dark:text-white truncate">{{ ch.name }}</span>
+                                                    <span :class="[
+                                                        'text-[9px] px-1.5 py-0.2 rounded font-bold uppercase',
+                                                        isChannelBanned(ch.name) ? 'bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400' : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                                                    ]">
+                                                        {{ isChannelBanned(ch.name) ? 'BAN状態' : '正常' }}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <button 
+                                                @click="toggleBanChannel(ch.name)"
+                                                :class="[
+                                                    'px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all',
+                                                    isChannelBanned(ch.name) 
+                                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                                                        : 'bg-red-600 hover:bg-red-700 text-white'
+                                                ]"
+                                                :disabled="currentUserRole !== 'admin'"
+                                                :class="{'opacity-55 cursor-not-allowed': currentUserRole !== 'admin'}"
+                                            >
+                                                {{ isChannelBanned(ch.name) ? 'BAN解除' : '凍結 (BAN)' }}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- 動画再生画面 -->
+                <div v-if="currentView === 'watch' && activeVideo" class="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        <!-- 左側：動画プレイヤー、コメント -->
+                        <div class="lg:col-span-2 space-y-4">
+                            
+                            <!-- プレイヤー枠 -->
+                            <div class="w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-lg relative">
+                                <!-- 埋め込みプレイヤー -->
+                                <iframe 
+                                    v-if="activeVideo.embedId"
+                                    :src="'https://www.youtube.com/embed/' + activeVideo.embedId + '?autoplay=1&rel=0'" 
+                                    title="YouTube video player" 
+                                    frameborder="0" 
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                    allowfullscreen
+                                    class="w-full h-full"
+                                ></iframe>
+                                <!-- YouTube IDがない場合 (カスタム投稿) のモック再生 -->
+                                <div v-else class="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-white relative">
+                                    <img :src="activeVideo.thumbnail" class="absolute inset-0 w-full h-full object-cover opacity-30 blur-sm">
+                                    <div class="relative z-10 text-center p-6 bg-black/50 rounded-xl max-w-md">
+                                        <i class="fa-regular fa-circle-play text-6xl text-red-500 mb-3 animate-pulse"></i>
+                                        <h3 class="text-lg font-bold">{{ activeVideo.title }}</h3>
+                                        <p class="text-xs text-gray-300 mt-2">模擬アップロード動画です。実際には再生されませんが、コメント投稿などのリアクションが可能です。</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ビデオ基本情報 -->
+                            <h1 class="text-xl font-bold text-gray-900 dark:text-yt-text leading-snug">
+                                {{ activeVideo.title }}
+                            </h1>
+
+                            <!-- チャンネル詳細とアクションボタン -->
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-2 border-b border-gray-100 dark:border-yt-border/50 pb-4">
+                                <!-- チャンネル情報 -->
+                                <div class="flex items-center space-x-3">
+                                    <img :src="activeVideo.channelAvatar" class="w-10 h-10 rounded-full object-cover">
+                                    <div>
+                                        <h3 class="font-bold text-sm flex items-center">
+                                            {{ activeVideo.channelName }}
+                                            <i class="fa-solid fa-circle-check text-[10px] text-gray-400 ml-1" v-if="activeVideo.verified"></i>
+                                        </h3>
+                                        <p class="text-xs text-gray-500 dark:text-yt-muted">チャンネル登録者数 {{ activeVideo.subscribers }}</p>
+                                    </div>
+                                    <button 
+                                        @click="toggleSubscribe(activeVideo)"
+                                        :class="[
+                                            'px-4 py-2 text-xs font-semibold rounded-full transition-all ml-4',
+                                            activeVideo.subscribed 
+                                                ? 'bg-gray-200 dark:bg-yt-hover text-gray-800 dark:text-yt-text hover:bg-gray-300 dark:hover:bg-zinc-700' 
+                                                : 'bg-black dark:bg-white text-white dark:text-black hover:opacity-90'
+                                        ]"
+                                    >
+                                        {{ activeVideo.subscribed ? '登録済み' : 'チャンネル登録' }}
+                                    </button>
+                                    <!-- 【管理者用】視聴中に即時削除できる隠しボタン -->
+                                    <button 
+                                        v-if="currentUserRole === 'admin'"
+                                        @click="deleteVideoAdmin(activeVideo)"
+                                        class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-full transition-all flex items-center space-x-1"
+                                    >
+                                        <i class="fa-solid fa-trash-can"></i>
+                                        <span>管理者権限で削除</span>
+                                    </button>
+                                </div>
+
+                                <!-- リアクションツールバー -->
+                                <div class="flex items-center space-x-2 overflow-x-auto pb-1">
+                                    <!-- 高評価/低評価 -->
+                                    <div class="flex items-center bg-gray-100 dark:bg-yt-hover rounded-full overflow-hidden">
+                                        <button 
+                                            @click="toggleLike"
+                                            class="flex items-center space-x-1.5 px-4 py-2 hover:bg-gray-200 dark:hover:bg-zinc-700 text-xs font-semibold transition-colors"
+                                            :class="{'text-blue-500': activeVideo.liked}"
+                                        >
+                                            <i class="fa-solid fa-thumbs-up"></i>
+                                            <span>{{ activeVideo.likes + (activeVideo.liked ? 1 : 0) }}</span>
+                                        </button>
+                                        <div class="h-4 w-[1px] bg-gray-300 dark:bg-yt-border"></div>
+                                        <button 
+                                            @click="toggleDislike"
+                                            class="px-3.5 py-2 hover:bg-gray-200 dark:hover:bg-zinc-700 text-xs transition-colors"
+                                            :class="{'text-blue-500': activeVideo.disliked}"
+                                        >
+                                            <i class="fa-solid fa-thumbs-down"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- 共有 -->
+                                    <button @click="copyVideoLink" class="flex items-center space-x-1.5 bg-gray-100 dark:bg-yt-hover hover:bg-gray-200 dark:hover:bg-zinc-700 px-4 py-2 rounded-full text-xs font-semibold transition-colors">
+                                        <i class="fa-solid fa-share"></i>
+                                        <span>共有</span>
+                                    </button>
+
+                                    <!-- 後で見る保存 -->
+                                    <button @click="saveToWatchLater" class="flex items-center space-x-1.5 bg-gray-100 dark:bg-yt-hover hover:bg-gray-200 dark:hover:bg-zinc-700 px-4 py-2 rounded-full text-xs font-semibold transition-colors">
+                                        <i class="fa-regular fa-clock"></i>
+                                        <span>保存</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 説明欄 -->
+                            <div class="bg-gray-100 dark:bg-yt-card p-3.5 rounded-xl text-sm transition-all relative">
+                                <div class="font-semibold text-xs text-gray-800 dark:text-yt-text flex space-x-2 mb-1">
+                                    <span>{{ formatViews(activeVideo.views) }}回視聴</span>
+                                    <span>•</span>
+                                    <span>{{ activeVideo.uploadedAt }}</span>
+                                </div>
+                                <p :class="['text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap', showFullDesc ? '' : 'line-clamp-2']">
+                                    {{ activeVideo.description || '概要欄はありません。' }}
+                                </p>
+                                <button @click="showFullDesc = !showFullDesc" class="text-xs font-bold hover:underline mt-2 inline-block">
+                                    {{ showFullDesc ? '一部を表示' : 'もっと見る' }}
+                                </button>
+                            </div>
+
+                            <!-- コメントセクション -->
+                            <div class="space-y-4 pt-2">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="font-bold text-base">
+                                        コメント {{ activeVideo.comments ? activeVideo.comments.length : 0 }}件
+                                    </h3>
+                                    <!-- ソート順 -->
+                                    <div class="relative">
+                                        <button @click="showSortMenu = !showSortMenu" class="flex items-center space-x-1.5 text-xs font-bold">
+                                            <i class="fa-solid fa-arrow-down-wide-short"></i>
+                                            <span>並べ替え</span>
+                                        </button>
+                                        <div v-if="showSortMenu" class="absolute left-0 mt-2 w-36 bg-white dark:bg-yt-card border border-gray-200 dark:border-yt-border rounded-lg shadow-xl py-1 z-30 text-xs">
+                                            <button @click="sortComments('likes')" class="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-yt-hover">評価順</button>
+                                            <button @click="sortComments('newest')" class="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-yt-hover">新しい順</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- コメント入力エリア -->
+                                <div class="flex space-x-3">
+                                    <img src="https://placehold.co/100x100/dc2626/ffffff?text=User" class="w-9 h-9 rounded-full object-cover">
+                                    <div class="flex-1">
+                                        <textarea 
+                                            v-model="newCommentText"
+                                            placeholder="コメントを追加..." 
+                                            rows="2"
+                                            class="w-full bg-transparent border-b border-gray-300 dark:border-yt-border focus:border-black dark:focus:border-white focus:outline-none text-sm py-1 resize-none"
+                                            @focus="commentFocused = true"
+                                        ></textarea>
+                                        <div v-if="commentFocused" class="flex justify-end space-x-2 mt-2">
+                                            <button @click="cancelComment" class="px-3.5 py-1.5 hover:bg-gray-100 dark:hover:bg-yt-hover rounded-full text-xs font-bold transition-all">
+                                                キャンセル
+                                            </button>
+                                            <button 
+                                                @click="submitComment" 
+                                                :disabled="!newCommentText.trim()"
+                                                :class="[
+                                                    'px-3.5 py-1.5 rounded-full text-xs font-bold transition-all',
+                                                    newCommentText.trim() 
+                                                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                                                        : 'bg-gray-200 dark:bg-yt-hover text-gray-400 cursor-not-allowed'
+                                                ]"
+                                            >
+                                                コメント
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- コメントリスト -->
+                                <div class="space-y-4 pt-2">
+                                    <div v-for="cmt in activeVideo.comments" :key="cmt.id" class="flex space-x-3 text-sm group">
+                                        <img :src="cmt.avatar" class="w-9 h-9 rounded-full object-cover flex-shrink-0">
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-2">
+                                                <span class="font-bold text-xs">{{ cmt.author }}</span>
+                                                <span class="text-[10px] text-gray-500 dark:text-yt-muted">{{ cmt.time }}</span>
+                                            </div>
+                                            <p class="text-xs text-gray-800 dark:text-gray-200 mt-1 leading-normal">{{ cmt.text }}</p>
+                                            
+                                            <!-- コメントアクション -->
+                                            <div class="flex items-center space-x-3 mt-2 text-xs text-gray-500 dark:text-yt-muted">
+                                                <button @click="likeComment(cmt)" class="hover:text-black dark:hover:text-white flex items-center space-x-1" :class="{'text-blue-500': cmt.liked}">
+                                                    <i class="fa-solid fa-thumbs-up"></i>
+                                                    <span>{{ cmt.likes }}</span>
+                                                </button>
+                                                <button class="hover:text-black dark:hover:text-white">
+                                                    <i class="fa-solid fa-thumbs-down"></i>
+                                                </button>
+                                                <button class="hover:text-black dark:hover:text-white font-bold text-[11px]">返信</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右側：関連動画リスト -->
+                        <div class="space-y-4">
+                            <h3 class="font-bold text-sm">おすすめの動画</h3>
+                            
+                            <div class="space-y-3.5">
+                                <div 
+                                    v-for="rec in recommendedVideos" 
+                                    :key="rec.id" 
+                                    class="flex space-x-2.5 cursor-pointer group"
+                                    @click="playVideo(rec)"
+                                >
+                                    <!-- 関連動画サムネイル -->
+                                    <div class="relative w-40 aspect-video rounded-lg overflow-hidden bg-gray-200 dark:bg-yt-card flex-shrink-0">
+                                        <img :src="rec.thumbnail" class="w-full h-full object-cover">
+                                        <span class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1 py-0.2 rounded font-semibold">
+                                            {{ rec.duration }}
+                                        </span>
+                                    </div>
+
+                                    <!-- 関連動画テキスト -->
+                                    <div class="flex-1 min-w-0">
+                                        <h4 class="font-semibold text-xs line-clamp-2 text-gray-900 dark:text-yt-text group-hover:text-red-500 transition-colors leading-snug">
+                                            {{ rec.title }}
+                                        </h4>
+                                        <p class="text-[11px] text-gray-500 dark:text-yt-muted mt-1 truncate">
+                                            {{ rec.channelName }}
+                                        </p>
+                                        <p class="text-[10px] text-gray-500 dark:text-yt-muted">
+                                            {{ formatViews(rec.views) }}回視聴 • {{ rec.uploadedAt }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </main>
+        </div>
+
+        <!-- アップロードモーダル (作成) -->
+        <div v-if="showUploadModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div class="bg-white dark:bg-yt-card w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div class="px-5 py-3 border-b border-gray-200 dark:border-yt-border flex justify-between items-center bg-gray-50 dark:bg-zinc-900">
+                    <h2 class="font-bold text-base flex items-center space-x-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-red-500"></i>
+                        <span>動画を模擬アップロード</span>
+                    </h2>
+                    <button @click="closeUploadModal" class="p-1 hover:bg-gray-200 dark:hover:bg-yt-hover rounded-full transition-colors">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                
+                <form @submit.prevent="submitUpload" class="p-5 space-y-4 text-sm">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">動画のタイトル *</label>
+                        <input 
+                            v-model="uploadForm.title" 
+                            type="text" 
+                            required 
+                            placeholder="素晴らしいビデオタイトルを入力" 
+                            class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        >
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">カテゴリ *</label>
+                            <select 
+                                v-model="uploadForm.category" 
+                                class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-500"
+                            >
+                                <option v-for="cat in categories.slice(1)" :key="cat" :value="cat">{{ cat }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">再生時間 *</label>
+                            <input 
+                                v-model="uploadForm.duration" 
+                                type="text" 
+                                required 
+                                placeholder="例: 12:34" 
+                                class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-500"
+                            >
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">サムネイルテーマ</label>
+                        <select 
+                            v-model="uploadForm.thumbnailTheme" 
+                            class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        >
+                            <option value="tech">テック (Tech)</option>
+                            <option value="nature">自然 (Nature)</option>
+                            <option value="music">音楽 (Music)</option>
+                            <option value="game">ゲーム (Gaming)</option>
+                            <option value="urban">都市 (Urban)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">説明欄</label>
+                        <textarea 
+                            v-model="uploadForm.description" 
+                            rows="3" 
+                            placeholder="ビデオについての説明を書きましょう" 
+                            class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-500 resize-none"
+                        ></textarea>
+                    </div>
+
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-yt-border/50">
+                        <button type="button" @click="closeUploadModal" class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-yt-hover rounded-full text-xs font-bold">
+                            キャンセル
+                        </button>
+                        <button type="submit" class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-xs font-bold transition-all shadow-md">
+                            アップロードする
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- トースト通知 -->
+        <div v-if="toastMessage" class="fixed bottom-5 right-5 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 px-4 py-3 rounded-xl shadow-2xl z-50 text-xs font-medium flex items-center space-x-2 animate-bounce">
+            <i class="fa-solid fa-circle-info text-blue-500 dark:text-blue-600 text-sm"></i>
+            <span>{{ toastMessage }}</span>
+        </div>
+
+        <!-- 【新規】ログイン切り替えモーダル -->
+        <div v-if="showLoginModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div class="bg-white dark:bg-yt-card w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div class="px-5 py-3.5 border-b border-gray-200 dark:border-yt-border flex justify-between items-center bg-gray-50 dark:bg-zinc-900">
+                    <h2 class="font-bold text-base flex items-center space-x-2">
+                        <i class="fa-solid fa-user-lock text-red-500"></i>
+                        <span>ログイン権限切り替え</span>
+                    </h2>
+                    <button @click="showLoginModal = false" class="p-1 hover:bg-gray-200 dark:hover:bg-yt-hover rounded-full transition-colors">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                <div class="p-5 space-y-4 text-xs">
+                    <p class="text-gray-500 dark:text-yt-muted leading-relaxed">
+                        アカウント権限を切り替えて、管理者用の機能（削除、ログ監視）や、クリエイター用チャンネル設定をデモ体験できます。
+                    </p>
+
+                    <div class="space-y-2.5">
+                        <!-- 一般デモユーザー -->
+                        <button 
+                            @click="selectRole('user')"
+                            :class="[
+                                'w-full p-3 rounded-xl border text-left flex items-center space-x-3 transition-all',
+                                currentUserRole === 'user' ? 'border-red-500 bg-red-500/5 ring-1 ring-red-500' : 'border-gray-200 dark:border-yt-border hover:bg-gray-50 dark:hover:bg-yt-hover'
+                            ]"
+                        >
+                            <div class="w-8 h-8 rounded-full bg-zinc-500 text-white flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-user"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-900 dark:text-white">デモ一般ユーザー</p>
+                                <p class="text-[10px] text-gray-400 dark:text-yt-muted">一般の動画視聴・コメント・高評価用</p>
+                            </div>
+                            <i v-if="currentUserRole === 'user'" class="fa-solid fa-circle-check text-red-500"></i>
+                        </button>
+
+                        <!-- クリエイター -->
+                        <button 
+                            @click="selectRole('creator')"
+                            :class="[
+                                'w-full p-3 rounded-xl border text-left flex items-center space-x-3 transition-all',
+                                currentUserRole === 'creator' ? 'border-blue-500 bg-blue-500/5 ring-1 ring-blue-500' : 'border-gray-200 dark:border-yt-border hover:bg-gray-50 dark:hover:bg-yt-hover'
+                            ]"
+                        >
+                            <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-video"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-900 dark:text-white">クリエイター (Creator)</p>
+                                <p class="text-[10px] text-gray-400 dark:text-yt-muted">チャンネルを設立し独自の動画を投稿可能</p>
+                            </div>
+                            <i v-if="currentUserRole === 'creator'" class="fa-solid fa-circle-check text-blue-500"></i>
+                        </button>
+
+                        <!-- 管理者 -->
+                        <button 
+                            @click="selectRole('admin')"
+                            :class="[
+                                'w-full p-3 rounded-xl border text-left flex items-center space-x-3 transition-all',
+                                currentUserRole === 'admin' ? 'border-red-600 bg-red-600/5 ring-1 ring-red-600' : 'border-gray-200 dark:border-yt-border hover:bg-gray-50 dark:hover:bg-yt-hover'
+                            ]"
+                        >
+                            <div class="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center text-sm">
+                                <i class="fa-solid fa-user-shield"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-900 dark:text-white flex items-center space-x-1">
+                                    <span>システム管理者 (admin)</span>
+                                    <span class="bg-red-600 text-white text-[8px] font-bold px-1.5 rounded">FULL ACCESS</span>
+                                </p>
+                                <p class="text-[10px] text-gray-400 dark:text-yt-muted">視聴監視ダッシュボード、チャンネルBAN、動画削除</p>
+                            </div>
+                            <i v-if="currentUserRole === 'admin'" class="fa-solid fa-circle-check text-red-600"></i>
+                        </button>
+                    </div>
+
+                    <div class="pt-2 border-t border-gray-100 dark:border-yt-border/50 text-center">
+                        <button @click="showLoginModal = false" class="px-5 py-2 bg-gray-100 dark:bg-yt-hover hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full font-bold transition-all">
+                            閉じる
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 【新規】チャンネル作成モーダル -->
+        <div v-if="showCreateChannelModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div class="bg-white dark:bg-yt-card w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <div class="px-5 py-3.5 border-b border-gray-200 dark:border-yt-border flex justify-between items-center bg-gray-50 dark:bg-zinc-900">
+                    <h2 class="font-bold text-base flex items-center space-x-2">
+                        <i class="fa-regular fa-square-plus text-red-500"></i>
+                        <span>WeTube チャンネル作成</span>
+                    </h2>
+                    <button @click="showCreateChannelModal = false" class="p-1 hover:bg-gray-200 dark:hover:bg-yt-hover rounded-full transition-colors">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+                
+                <form @submit.prevent="submitCreateChannel" class="p-5 space-y-4 text-xs">
+                    <div class="flex flex-col items-center py-2">
+                        <div class="relative group cursor-pointer">
+                            <img :src="channelForm.avatar" class="w-20 h-20 rounded-full object-cover border-2 border-red-500">
+                            <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fa-solid fa-camera text-white text-lg"></i>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-gray-400 dark:text-yt-muted mt-2">チャンネルアイコン (Unsplash自動テーマ)</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">チャンネル名 *</label>
+                        <input 
+                            v-model="channelForm.name" 
+                            type="text" 
+                            required 
+                            placeholder="例: たかしのテック動画部屋" 
+                            class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">ハンドルネーム (@) *</label>
+                        <input 
+                            v-model="channelForm.handle" 
+                            type="text" 
+                            required 
+                            placeholder="例: takashi_tech" 
+                            class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-500 dark:text-yt-muted uppercase tracking-wider mb-1">チャンネルのテーマ画像</label>
+                        <select 
+                            v-model="channelForm.avatarTheme" 
+                            @change="updateFormAvatar"
+                            class="w-full bg-gray-50 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-red-500"
+                        >
+                            <option value="tech">テック (Tech)</option>
+                            <option value="music">音楽 (Music)</option>
+                            <option value="art">アート (Art)</option>
+                            <option value="gamer">ゲーマー (Gaming)</option>
+                            <option value="cute">キュート (Cute)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex justify-end space-x-2 pt-2 border-t border-gray-100 dark:border-yt-border/50">
+                        <button type="button" @click="showCreateChannelModal = false" class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-yt-hover rounded-full font-bold">
+                            キャンセル
+                        </button>
+                        <button type="submit" class="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full font-bold transition-all shadow-md">
+                            チャンネルを公開
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Vue.js アプリケーションコード -->
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // UI & テーマ状態
+                const darkMode = ref(true);
+                const sidebarOpen = ref(true);
+                const showMobileSearch = ref(false);
+                const currentView = ref('feed'); // 'feed' | 'watch' | 'admin_dashboard'
+                const activeMenu = ref('home');
+                const selectedCategory = ref('すべて');
+                const searchQuery = ref('');
+                const activeSearchQuery = ref('');
+                const toastMessage = ref('');
+
+                // 【新規】ログイン・管理状態
+                const currentUserRole = ref('user'); // 'user' | 'creator' | 'admin'
+                const showLoginModal = ref(false);
+                const showCreateChannelModal = ref(false);
+                
+                // 【新規】ユーザーチャンネルデータ
+                const userChannel = ref(null);
+                const channelForm = ref({
+                    name: '',
+                    handle: '',
+                    avatarTheme: 'tech',
+                    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80'
+                });
+
+                // 【新規】BAN＆削除管理用配列
+                const bannedChannels = ref([]); // BANされたチャンネル名のリスト
+
+                // 【新規】監視ログ
+                const viewLogs = ref([
+                    { id: 'log_01', user: 'Guest_2431', action: '動画視聴', target: '深夜の静かなLo-Fiビート', time: '16:42:01', ip: '153.246.12.98' },
+                    { id: 'log_02', user: 'Kiyoto_Design', action: 'チャンネル登録', target: 'Studio Canvas', time: '16:41:15', ip: '210.143.5.42' },
+                    { id: 'log_03', user: 'Sakura_M', action: '高評価', target: '深夜の静かなLo-Fiビート', time: '16:38:50', ip: '118.238.99.123' },
+                    { id: 'log_04', user: 'Admin_Core', action: '監視開始', target: ' WeTube Core Security', time: '16:30:00', ip: '127.0.0.1' }
+                ]);
+
+                // モーダル・ポップアップ状態
+                const showUploadModal = ref(false);
+                const showNotifications = ref(false);
+                const showProfileMenu = ref(false);
+                const showSortMenu = ref(false);
+
+                // 動画詳細状態
+                const activeVideo = ref(null);
+                const showFullDesc = ref(false);
+                const newCommentText = ref('');
+                const commentFocused = ref(false);
+
+                // カテゴリ一覧
+                const categories = ['すべて', '音楽', 'テック', '自然', 'ゲーム', 'デザイン'];
+
+                // 登録チャンネルリスト
+                const subscribedChannels = ref([
+                    { name: 'Relaxing Sound Space', avatar: 'https://placehold.co/100x100/10b981/ffffff?text=RSS', hasUpdate: true },
+                    { name: 'Tech Insight JP', avatar: 'https://placehold.co/100x100/3b82f6/ffffff?text=TIJ', hasUpdate: false },
+                    { name: 'Lo-Fi Chill Beats', avatar: 'https://placehold.co/100x100/ec4899/ffffff?text=LCB', hasUpdate: true },
+                    { name: 'Game Arena', avatar: 'https://placehold.co/100x100/f59e0b/ffffff?text=GA', hasUpdate: false }
+                ]);
+
+                // 通知
+                const unreadNotifications = ref(2);
+                const notifications = ref([
+                    { id: 1, avatar: 'https://placehold.co/100x100/10b981/ffffff?text=RSS', text: 'Relaxing Sound Spaceが新しい動画「Forest Meditation Loop」をアップロードしました。', time: '10分前' },
+                    { id: 2, avatar: 'https://placehold.co/100x100/ec4899/ffffff?text=LCB', text: 'Lo-Fi Chill Beatsが新しいライブ配信を開始しました。', time: '1時間前' },
+                    { id: 3, avatar: 'https://placehold.co/100x100/3b82f6/ffffff?text=TIJ', text: 'あなたのコメントに「Tech Insight JP」がいいねを付けました。', time: '1日前' }
+                ]);
+
+                // 初期ビデオデータベース (deletedキー、banned判定追加)
+                const videos = ref([
+                    {
+                        id: 'v1',
+                        title: '深夜の静かなLo-Fiビート - 勉強と仕事のためのリラックス音楽',
+                        embedId: '5qap5aO4i9A', // 実際のLoFi動画
+                        channelName: 'Lo-Fi Chill Beats',
+                        channelAvatar: 'https://placehold.co/100x100/ec4899/ffffff?text=LCB',
+                        subscribers: '124万人',
+                        views: 4520300,
+                        uploadedAt: '3ヶ月前',
+                        duration: '2:01:45',
+                        category: '音楽',
+                        verified: true,
+                        subscribed: false,
+                        liked: false,
+                        disliked: false,
+                        likes: 12400,
+                        deleted: false,
+                        thumbnail: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=640&q=80',
+                        description: '深夜の静かなLo-Fiチルビートです。作業用BGM、勉強用BGM、睡眠用BGMとしてお使いいただけます。オリジナルのアンビエントなコード進行とノスタルジックなメロディーが心を落ち着かせます。\n\nTracklist:\n01. Nightfall\n02. Moonlight Walk\n03. Coffee and Books\n04. Sleepy Cat\n\n© Lo-Fi Chill Beats Records',
+                        comments: [
+                            { id: 'c1', author: 'Takashi K.', avatar: 'https://placehold.co/100x100/8b5cf6/ffffff?text=TK', text: 'この曲を聴きながらのコード書きが一番はかどります。本当に素晴らしい！', time: '3日前', likes: 215, liked: false },
+                            { id: 'c2', author: 'Sora_M', avatar: 'https://placehold.co/100x100/10b981/ffffff?text=SM', text: '雨の音との相性が抜群に良いですね。毎晩ベッドに入りながら聴いています。', time: '1週間前', likes: 89, liked: false }
+                        ]
+                    },
+                    {
+                        id: 'v2',
+                        title: '【徹底検証】最新の次世代AIワークステーションを開封＆最速レビュー！',
+                        embedId: 'EngW7tLk6R8', // テック系
+                        channelName: 'Tech Insight JP',
+                        channelAvatar: 'https://placehold.co/100x100/3b82f6/ffffff?text=TIJ',
+                        subscribers: '48.2万人',
+                        views: 128000,
+                        uploadedAt: '5日前',
+                        duration: '15:32',
+                        category: 'テック',
+                        verified: true,
+                        subscribed: false,
+                        liked: false,
+                        disliked: false,
+                        likes: 4200,
+                        deleted: false,
+                        thumbnail: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=640&q=80',
+                        description: 'ついに発売された次世代プロセッサ搭載のAIワークステーションをレビューします。レンダリング性能、ローカルLLM構築時の快適度、熱設計まで徹底的にベンチマークをまわしました。\n\n提供：Tech Parts Co., Ltd.',
+                        comments: [
+                            { id: 'c3', author: 'Kenji AI', avatar: 'https://placehold.co/100x100/f59e0b/ffffff?text=KA', text: 'ついにこのスペックがデスクトップで扱える時代になったのですね。価格が気になります。', time: '4日前', likes: 142, liked: false },
+                            { id: 'c4', author: 'Gamer_99', avatar: 'https://placehold.co/100x100/ec4899/ffffff?text=G9', text: '前モデルとのゲーム実効フレームレートの差についても詳しく知りたいです。動画とても参考になりました！', time: '5日前', likes: 45, liked: false }
+                        ]
+                    },
+                    {
+                        id: 'v3',
+                        title: '4K画質：雄大なアルプスの森と鳥のさえずり、癒やしの自然音BGM',
+                        embedId: 'aqz-KE-bpKQ', // Nature (Big Buck Bunny)
+                        channelName: 'Relaxing Sound Space',
+                        channelAvatar: 'https://placehold.co/100x100/10b981/ffffff?text=RSS',
+                        subscribers: '15.6万人',
+                        views: 94000,
+                        uploadedAt: '12日前',
+                        duration: '3:00:00',
+                        category: '自然',
+                        verified: false,
+                        subscribed: false,
+                        liked: false,
+                        disliked: false,
+                        likes: 3120,
+                        deleted: false,
+                        thumbnail: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=640&q=80',
+                        description: 'スイス・アルプスの深緑あふれる森で収録された高品質自然音です。ストレス軽減、集中力アップ、マインドフルネス呼吸法のお供にどうぞ。最高のASMRをお届け。',
+                        comments: [
+                            { id: 'c5', author: 'Yuki O.', avatar: 'https://placehold.co/100x100/22c55e/ffffff?text=YO', text: '自宅にいながら大自然の中で深呼吸しているような気分になれます。', time: '10日前', likes: 32, liked: false }
+                        ]
+                    },
+                    {
+                        id: 'v4',
+                        title: '【歴史的名作】世紀の大発明「Rickroll」の裏側と、世界を巻き込んだインターネットミーム',
+                        embedId: 'dQw4w9WgXcQ', // Rick Astley
+                        channelName: 'Meme Archive JP',
+                        channelAvatar: 'https://placehold.co/100x100/6b7280/ffffff?text=MA',
+                        subscribers: '32.1万人',
+                        views: 142010200,
+                        uploadedAt: '10年前',
+                        duration: '3:33',
+                        category: '音楽',
+                        verified: true,
+                        subscribed: false,
+                        liked: false,
+                        disliked: false,
+                        likes: 12004200,
+                        deleted: false,
+                        thumbnail: 'https://images.unsplash.com/photo-1614680376593-902f74fa0d41?auto=format&fit=crop&w=640&q=80',
+                        description: '誰もが一度は釣られたあの伝説の名曲！Rick Astleyの「Never Gonna Give You Up」に隠された、インターネットカルチャー最大のミーム現象の全軌跡に迫る。',
+                        comments: [
+                            { id: 'c6', author: 'Internet Explorer', avatar: 'https://placehold.co/100x100/ef4444/ffffff?text=IE', text: 'これを見るためにまた釣られてやってきました。最高。', time: '1年前', likes: 1204, liked: false },
+                            { id: 'c7', author: 'NostalgicUser', avatar: 'https://placehold.co/100x100/3b82f6/ffffff?text=NU', text: '10年経っても色褪せない名作中の名作。', time: '3ヶ月前', likes: 540, liked: false }
+                        ]
+                    },
+                    {
+                        id: 'v5',
+                        title: '【実況解説】超大作サバイバルゲームをノーダメージで完全攻略！【Part 1】',
+                        embedId: 'tntOCGkgt98', // Gaming
+                        channelName: 'Game Arena',
+                        channelAvatar: 'https://placehold.co/100x100/f59e0b/ffffff?text=GA',
+                        subscribers: '89.1万人',
+                        views: 654000,
+                        uploadedAt: '1ヶ月前',
+                        duration: '45:10',
+                        category: 'ゲーム',
+                        verified: true,
+                        subscribed: false,
+                        liked: false,
+                        disliked: false,
+                        likes: 18900,
+                        deleted: false,
+                        thumbnail: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=640&q=80',
+                        description: '最高難易度設定でのノーダメ縛り攻略動画です。敵の配置パターン、安全地帯、ボス戦での立ち回りを初心者の方にもわかりやすく解説します。',
+                        comments: [
+                            { id: 'c8', author: 'ProGamer_X', avatar: 'https://placehold.co/100x100/374151/ffffff?text=PX', text: '第3フェーズの回避行動は完璧すぎて声出ました！真似してみます。', time: '3週間前', likes: 88, liked: false }
+                        ]
+                    },
+                    {
+                        id: 'v6',
+                        title: 'デザインセンスを劇的に高める「グリッドシステム」の基本ルールを徹底講義',
+                        embedId: '9xjA5S6yKTM', // Design/space loop style
+                        channelName: 'Studio Canvas',
+                        channelAvatar: 'https://placehold.co/100x100/a855f7/ffffff?text=SC',
+                        subscribers: '12万人',
+                        views: 231000,
+                        uploadedAt: '2週間前',
+                        duration: '22:15',
+                        category: 'デザイン',
+                        verified: false,
+                        subscribed: false,
+                        liked: false,
+                        disliked: false,
+                        likes: 9100,
+                        deleted: false,
+                        thumbnail: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=640&q=80',
+                        description: 'Webデザイン、DTPレイアウトで絶対に役立つ「グリッドレイアウト」の理論と実践例を解説。デザイナー必見の神回です！',
+                        comments: [
+                            { id: 'c9', author: 'Junior Designer', avatar: 'https://placehold.co/100x100/6366f1/ffffff?text=JD', text: 'なんとなく配置していた要素に明確なルールが加わりました。視界がクリアになった気分です！', time: '12日前', likes: 41, liked: false }
+                        ]
+                    }
+                ]);
+
+                // システム上のユニークチャンネルリスト (BAN管理画面用)
+                const allChannels = computed(() => {
+                    const unique = {};
+                    videos.value.forEach(v => {
+                        if (!unique[v.channelName]) {
+                            unique[v.channelName] = {
+                                name: v.channelName,
+                                avatar: v.channelAvatar
+                            };
+                        }
+                    });
+                    // 作成中のチャンネル
+                    if (userChannel.value) {
+                        unique[userChannel.value.name] = {
+                            name: userChannel.value.name,
+                            avatar: userChannel.value.avatar
+                        };
+                    }
+                    return Object.values(unique);
+                });
+
+                // ロール別のプロフィール情報
+                const currentUserName = computed(() => {
+                    if (currentUserRole.value === 'admin') return 'システム管理者 (Admin)';
+                    if (currentUserRole.value === 'creator' && userChannel.value) {
+                        return `${userChannel.value.name} (クリエイター)`;
+                    }
+                    if (currentUserRole.value === 'creator') return 'デモクリエイター (チャンネル未作成)';
+                    return 'デモ一般ユーザー';
+                });
+
+                const currentUserEmail = computed(() => {
+                    if (currentUserRole.value === 'admin') return 'admin@wetube.com';
+                    if (currentUserRole.value === 'creator') return 'creator@wetube.com';
+                    return 'demo_user@wetube.com';
+                });
+
+                const userAvatar = computed(() => {
+                    if (currentUserRole.value === 'admin') {
+                        return 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=100&q=80';
+                    }
+                    if (currentUserRole.value === 'creator' && userChannel.value) {
+                        return userChannel.value.avatar;
+                    }
+                    if (currentUserRole.value === 'creator') {
+                        return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80';
+                    }
+                    return 'https://placehold.co/100x100/dc2626/ffffff?text=User';
+                });
+
+                // アップロード用フォーム
+                const uploadForm = ref({
+                    title: '',
+                    category: 'テック',
+                    duration: '10:00',
+                    thumbnailTheme: 'tech',
+                    description: ''
+                });
+
+                // 検索 & フィルター & BAN/削除制御 が効いた動画一覧を取得
+                const filteredVideos = computed(() => {
+                    return videos.value.filter(video => {
+                        // 0. 強制削除されたビデオ、またはBANされたチャンネルのビデオは除外
+                        if (video.deleted) return false;
+                        if (bannedChannels.value.includes(video.channelName)) return false;
+
+                        // 1. カテゴリによるフィルタリング
+                        const matchesCategory = selectedCategory.value === 'すべて' || video.category === selectedCategory.value;
+                        
+                        // 2. 検索語句によるフィルタリング
+                        const text = (activeSearchQuery.value || '').toLowerCase().trim();
+                        const matchesSearch = !text || 
+                            video.title.toLowerCase().includes(text) || 
+                            video.channelName.toLowerCase().includes(text) || 
+                            video.category.toLowerCase().includes(text);
+                        
+                        return matchesCategory && matchesSearch;
+                    });
+                });
+
+                // おすすめの関連動画 (削除/BAN、再生中の動画を除外)
+                const recommendedVideos = computed(() => {
+                    if (!activeVideo.value) return [];
+                    return videos.value
+                        .filter(v => v.id !== activeVideo.value.id && !v.deleted && !bannedChannels.value.includes(v.channelName))
+                        .slice(0, 5);
+                });
+
+                // 各種アクションメソッド
+                const toggleTheme = () => {
+                    darkMode.value = !darkMode.value;
+                    const rootClass = document.documentElement.classList;
+                    if (darkMode.value) {
+                        rootClass.add('dark');
+                    } else {
+                        rootClass.remove('dark');
+                    }
+                };
+
+                const toggleSidebar = () => {
+                    sidebarOpen.value = !sidebarOpen.value;
+                };
+
+                const toggleMobileSearch = () => {
+                    showMobileSearch.value = !showMobileSearch.value;
+                };
+
+                const selectCategory = (category) => {
+                    selectedCategory.value = category;
+                };
+
+                const selectMenu = (menuName) => {
+                    activeMenu.value = menuName;
+                    if (menuName === 'home') {
+                        goHome();
+                    } else if (menuName === 'admin_dashboard') {
+                        currentView.value = 'admin_dashboard';
+                        showToast('統合管理セキュリティモニターを起動しました');
+                        addMonitorLog('Admin_Core', 'システム監視', 'ダッシュボード画面を開きました');
+                    } else {
+                        showToast(`「${menuName}」はデモ用にロックされています`);
+                    }
+                };
+
+                const goHome = () => {
+                    currentView.value = 'feed';
+                    activeMenu.value = 'home';
+                    activeVideo.value = null;
+                };
+
+                const executeSearch = () => {
+                    activeSearchQuery.value = searchQuery.value;
+                    currentView.value = 'feed';
+                    showMobileSearch.value = false;
+                    addMonitorLog(currentUserName.value, '検索実行', searchQuery.value || 'クリア');
+                };
+
+                const resetFilters = () => {
+                    selectedCategory.value = 'すべて';
+                    searchQuery.value = '';
+                    activeSearchQuery.value = '';
+                };
+
+                // ビデオの再生開始（再生ログも追加）
+                const playVideo = (video) => {
+                    activeVideo.value = video;
+                    currentView.value = 'watch';
+                    showFullDesc.value = false;
+                    commentFocused.value = false;
+                    newCommentText.value = '';
+                    
+                    // 視聴回数を模擬的に＋1
+                    video.views += 1;
+                    
+                    // 監視ログに書き出す
+                    addMonitorLog(currentUserName.value, '動画視聴開始', video.title);
+
+                    // 画面最上部へスクロール
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                };
+
+                // 登録チャンネル登録/解除の切り替え
+                const toggleSubscribe = (video) => {
+                    video.subscribed = !video.subscribed;
+                    if (video.subscribed) {
+                        showToast(`${video.channelName}のチャンネルを登録しました`);
+                        addMonitorLog(currentUserName.value, 'チャンネル登録', video.channelName);
+                        // チャンネルリストに動的に追加
+                        if (!subscribedChannels.value.some(ch => ch.name === video.channelName)) {
+                            subscribedChannels.value.unshift({
+                                name: video.channelName,
+                                avatar: video.channelAvatar,
+                                hasUpdate: false
+                            });
+                        }
+                    } else {
+                        showToast(`${video.channelName}のチャンネル登録を解除しました`);
+                        addMonitorLog(currentUserName.value, 'チャンネル登録解除', video.channelName);
+                        subscribedChannels.value = subscribedChannels.value.filter(ch => ch.name !== video.channelName);
+                    }
+                };
+
+                // 監視用のログ追加メソッド
+                const addMonitorLog = (user, action, target) => {
+                    const now = new Date();
+                    const timeStr = now.toTimeString().split(' ')[0];
+                    const randomIp = `192.168.${Math.floor(Math.random() * 254) + 1}.${Math.floor(Math.random() * 254) + 1}`;
+                    
+                    viewLogs.value.unshift({
+                        id: 'log_' + Date.now() + Math.random().toString(36).substr(2, 4),
+                        user: user.replace(' (あなた)', ''),
+                        action: action,
+                        target: target.length > 35 ? target.substr(0, 35) + '...' : target,
+                        time: timeStr,
+                        ip: user === 'Admin_Core' ? '127.0.0.1' : randomIp
+                    });
+
+                    // ログ保持件数は最大100件に制限
+                    if (viewLogs.value.length > 100) {
+                        viewLogs.value.pop();
+                    }
+                };
+
+                // ログの消去
+                const clearLogs = () => {
+                    if (currentUserRole.value !== 'admin') {
+                        showToast('ログの消去には管理者権限が必要です');
+                        return;
+                    }
+                    viewLogs.value = [];
+                    showToast('ログモニターをリセットしました');
+                };
+
+                // 【管理者】チャンネルのBANトグル
+                const toggleBanChannel = (channelName) => {
+                    if (currentUserRole.value !== 'admin') {
+                        showToast('チャンネルの凍結・解除にはシステム管理者権限が必要です');
+                        return;
+                    }
+
+                    const index = bannedChannels.value.indexOf(channelName);
+                    if (index > -1) {
+                        bannedChannels.value.splice(index, 1);
+                        showToast(`チャンネル @${channelName} のBANを解除しました。`);
+                        addMonitorLog('Admin_Core', 'BAN解除', channelName);
+                    } else {
+                        bannedChannels.value.push(channelName);
+                        showToast(`警告：チャンネル @${channelName} を強制BANしました。`);
+                        addMonitorLog('Admin_Core', 'チャンネル凍結(BAN)', channelName);
+                        
+                        // 再生中だった動画がそのチャンネルの場合、ホームに戻す
+                        if (activeVideo.value && activeVideo.value.channelName === channelName) {
+                            goHome();
+                        }
+                    }
+                };
+
+                const isChannelBanned = (channelName) => {
+                    return bannedChannels.value.includes(channelName);
+                };
+
+                // 【管理者】動画の強制削除
+                const deleteVideoAdmin = (video) => {
+                    if (currentUserRole.value !== 'admin') {
+                        showToast('ビデオの強制削除にはシステム管理者権限が必要です');
+                        return;
+                    }
+                    
+                    video.deleted = true;
+                    showToast(`ビデオ「${video.title}」をサーバーから強制削除しました。`);
+                    addMonitorLog('Admin_Core', 'ビデオ強制削除', video.title);
+                    
+                    // 現在再生中ならホームに強制送還
+                    if (activeVideo.value && activeVideo.value.id === video.id) {
+                        goHome();
+                    }
+                };
+
+                // 【新規】ログイン切り替えウィンドウ
+                const openLoginModal = () => {
+                    showLoginModal.value = true;
+                    showProfileMenu.value = false;
+                };
+
+                const selectRole = (role) => {
+                    currentUserRole.value = role;
+                    showLoginModal.value = false;
+                    showToast(`アカウント権限を【${role === 'admin' ? '管理者' : role === 'creator' ? 'クリエイター' : 'デモ一般'}】に変更しました。`);
+                    addMonitorLog('System', 'ログインロール変更', role);
+                };
+
+                // チャンネル管理画面遷移 or 作成モーダル起動
+                const handleMyChannelClick = () => {
+                    showProfileMenu.value = false;
+                    if (userChannel.value) {
+                        showToast(`あなたのチャンネル「${userChannel.value.name}」のクリエイター画面に移行しました`);
+                    } else {
+                        // チャンネル作成フォーム初期化
+                        channelForm.value = {
+                            name: '',
+                            handle: '',
+                            avatarTheme: 'tech',
+                            avatar: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=100&q=80'
+                        };
+                        showCreateChannelModal.value = true;
+                    }
+                };
+
+                // フォームのアバターテーマのUnsplash連動
+                const updateFormAvatar = () => {
+                    const theme = channelForm.value.avatarTheme;
+                    if (theme === 'tech') {
+                        channelForm.value.avatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=100&q=80';
+                    } else if (theme === 'music') {
+                        channelForm.value.avatar = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=100&q=80';
+                    } else if (theme === 'art') {
+                        channelForm.value.avatar = 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=100&q=80';
+                    } else if (theme === 'gamer') {
+                        channelForm.value.avatar = 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=100&q=80';
+                    } else if (theme === 'cute') {
+                        channelForm.value.avatar = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80';
+                    }
+                };
+
+                // チャンネルの新規作成
+                const submitCreateChannel = () => {
+                    const form = channelForm.value;
+                    if (!form.name.trim() || !form.handle.trim()) return;
+
+                    userChannel.value = {
+                        name: form.name,
+                        handle: '@' + form.handle.replace('@', ''),
+                        avatar: form.avatar
+                    };
+
+                    // クリエイター権限に自動変更
+                    currentUserRole.value = 'creator';
+                    showCreateChannelModal.value = false;
+                    showToast(`チャンネル「${form.name}」を作成しました！独自の動画を投稿できます。`);
+                    addMonitorLog(userChannel.value.name, 'チャンネル開設', userChannel.value.handle);
+                };
+
+                const logoutDemo = () => {
+                    userChannel.value = null;
+                    currentUserRole.value = 'user';
+                    showProfileMenu.value = false;
+                    showToast('すべてのデモセッションをログアウトしました');
+                    addMonitorLog('System', 'ログアウト', 'ゲストセッションに移行');
+                };
+
+                // いいね/低評価のアクション
+                const toggleLike = () => {
+                    if (activeVideo.value.disliked) {
+                        activeVideo.value.disliked = false;
+                    }
+                    activeVideo.value.liked = !activeVideo.value.liked;
+                    addMonitorLog(currentUserName.value, activeVideo.value.liked ? '高評価' : '高評価解除', activeVideo.value.title);
+                };
+
+                const toggleDislike = () => {
+                    if (activeVideo.value.liked) {
+                        activeVideo.value.liked = false;
+                    }
+                    activeVideo.value.disliked = !activeVideo.value.disliked;
+                };
+
+                // トーストメッセージをトリガーする
+                const showToast = (message) => {
+                    toastMessage.value = message;
+                    setTimeout(() => {
+                        toastMessage.value = '';
+                    }, 3000);
+                };
+
+                // クリップボード連携の模擬
+                const copyVideoLink = () => {
+                    const dummyUrl = `https://youtu.be/${activeVideo.value.embedId || 'dummy_id'}`;
+                    const textarea = document.createElement('textarea');
+                    textarea.value = dummyUrl;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    
+                    showToast('共有リンクをクリップボードにコピーしました！');
+                    addMonitorLog(currentUserName.value, '共有リンクコピー', activeVideo.value.title);
+                };
+
+                const saveToWatchLater = () => {
+                    showToast('「後で見る」プレイリストに追加されました');
+                    addMonitorLog(currentUserName.value, '後で見る保存', activeVideo.value.title);
+                };
+
+                // コメント処理
+                const cancelComment = () => {
+                    newCommentText.value = '';
+                    commentFocused.value = false;
+                };
+
+                const submitComment = () => {
+                    if (!newCommentText.value.trim()) return;
+
+                    const newComment = {
+                        id: 'c_user_' + Date.now(),
+                        author: currentUserName.value,
+                        avatar: userAvatar.value,
+                        text: newCommentText.value.trim(),
+                        time: '今さっき',
+                        likes: 0,
+                        liked: false
+                    };
+
+                    activeVideo.value.comments.unshift(newComment);
+                    addMonitorLog(currentUserName.value, 'コメント投稿', newCommentText.value.trim());
+                    
+                    newCommentText.value = '';
+                    commentFocused.value = false;
+                    showToast('コメントを投稿しました');
+                };
+
+                const likeComment = (comment) => {
+                    comment.liked = !comment.liked;
+                    if (comment.liked) {
+                        comment.likes += 1;
+                    } else {
+                        comment.likes -= 1;
+                    }
+                };
+
+                const sortComments = (criteria) => {
+                    showSortMenu.value = false;
+                    if (!activeVideo.value || !activeVideo.value.comments) return;
+
+                    if (criteria === 'likes') {
+                        activeVideo.value.comments.sort((a, b) => b.likes - a.likes);
+                        showToast('評価が高い順に並び替えました');
+                    } else if (criteria === 'newest') {
+                        activeVideo.value.comments.sort((a, b) => {
+                            if (a.time.includes('前') && b.time.includes('さっき')) return 1;
+                            if (b.time.includes('前') && a.time.includes('さっき')) return -1;
+                            return b.id.localeCompare(a.id);
+                        });
+                        showToast('最新のコメント順に並び替えました');
+                    }
+                };
+
+                // アップロードモーダル処理
+                const openUploadModal = () => {
+                    showUploadModal.value = true;
+                    // デフォルト値をリセット
+                    uploadForm.value = {
+                        title: '',
+                        category: 'テック',
+                        duration: '05:30',
+                        thumbnailTheme: 'tech',
+                        description: ''
+                    };
+                };
+
+                const closeUploadModal = () => {
+                    showUploadModal.value = false;
+                };
+
+                const submitUpload = () => {
+                    const form = uploadForm.value;
+                    if (!form.title.trim()) return;
+
+                    // 選択されたテーマに応じた高品質Unsplash画像を仮設定
+                    let themeImage = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=640&q=80';
+                    if (form.thumbnailTheme === 'nature') {
+                        themeImage = 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=640&q=80';
+                    } else if (form.thumbnailTheme === 'music') {
+                        themeImage = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=640&q=80';
+                    } else if (form.thumbnailTheme === 'game') {
+                        themeImage = 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=640&q=80';
+                    } else if (form.thumbnailTheme === 'urban') {
+                        themeImage = 'https://images.unsplash.com/photo-1449034446853-66c86144b0ad?auto=format&fit=crop&w=640&q=80';
+                    }
+
+                    // 投稿チャンネル設定（マイチャンネルがあればそれを使う、なければデモユーザー）
+                    const uploadChannelName = userChannel.value ? userChannel.value.name : 'デモユーザー (あなた)';
+                    const uploadChannelAvatar = userChannel.value ? userChannel.value.avatar : 'https://placehold.co/100x100/dc2626/ffffff?text=User';
+
+                    const newVideo = {
+                        id: 'v_user_' + Date.now(),
+                        title: form.title,
+                        embedId: null, // YouTube IDなし(モックプレイヤー)
+                        channelName: uploadChannelName,
+                        channelAvatar: uploadChannelAvatar,
+                        subscribers: '1人',
+                        views: 0,
+                        uploadedAt: 'たった今',
+                        duration: form.duration || '10:00',
+                        category: form.category,
+                        verified: false,
+                        subscribed: false,
+                        liked: false,
+                        disliked: false,
+                        likes: 0,
+                        deleted: false,
+                        thumbnail: themeImage,
+                        description: form.description || '投稿ユーザーにより提供された概要説明はありません。',
+                        comments: []
+                    };
+
+                    // 先頭に新規動画を追加
+                    videos.value.unshift(newVideo);
+                    closeUploadModal();
+                    
+                    // ホームへ戻る
+                    goHome();
+                    showToast('動画のアップロードが完了しました！リストからご確認ください。');
+                    addMonitorLog(uploadChannelName, '新規動画アップロード', form.title);
+                };
+
+                const toggleNotifications = () => {
+                    showNotifications.value = !showNotifications.value;
+                    showProfileMenu.value = false;
+                };
+
+                const clearNotifications = () => {
+                    unreadNotifications.value = 0;
+                    showNotifications.value = false;
+                    showToast('すべての通知を既読にしました');
+                };
+
+                const toggleProfileMenu = () => {
+                    showProfileMenu.value = !showProfileMenu.value;
+                    showNotifications.value = false;
+                };
+
+                // 【新規】ダッシュボードに動きを出すための擬似視聴イベントシミュレーター
+                const startSimulationTraffic = () => {
+                    const virtualUsers = ['Sato_Tech', 'Sakura_Flower', 'Neko_Coder', 'John_Meme', 'Design_Hub_JP', 'ChillStudy', 'GamerKen', 'Aqua_ASMR'];
+                    const virtualActions = ['動画視聴開始', '高評価', 'コメント投稿', 'チャンネル登録'];
+                    
+                    setInterval(() => {
+                        // ランダムにアクティビティを発生させてログへ追加
+                        const randomUser = virtualUsers[Math.floor(Math.random() * virtualUsers.length)];
+                        const randomAction = virtualActions[Math.floor(Math.random() * virtualActions.length)];
+                        
+                        // BANされていない公開中の動画からランダム選択
+                        const activeVids = videos.value.filter(v => !v.deleted && !bannedChannels.value.includes(v.channelName));
+                        if (activeVids.length === 0) return;
+                        
+                        const randomVid = activeVids[Math.floor(Math.random() * activeVids.length)];
+                        
+                        let targetText = randomVid.title;
+                        if (randomAction === 'コメント投稿') {
+                            const sampleComments = ['これは有益すぎる動画！', '最高すぎますね〜', '音質よき！勉強が捗る！', 'いつも見させてもらってます。', 'この攻略法すごく助かりました。'];
+                            targetText = sampleComments[Math.floor(Math.random() * sampleComments.length)];
+                        } else if (randomAction === 'チャンネル登録') {
+                            targetText = randomVid.channelName;
+                        }
+
+                        addMonitorLog(randomUser, randomAction, targetText);
+                    }, 5000); // 5秒ごとに誰かが何かを操作する様子を再現
+                };
+
+                // ドロップダウン等を画面外タップで閉じるためのハンドラー
+                onMounted(() => {
+                    document.addEventListener('click', (e) => {
+                        if (!e.target.closest('.relative')) {
+                            showNotifications.value = false;
+                            showProfileMenu.value = false;
+                        }
+                    });
+
+                    // 擬似トラフィックシミュレーション開始
+                    startSimulationTraffic();
+                });
+
+                // 視聴回数の見やすい表記フォーマット
+                const formatViews = (val) => {
+                    if (val >= 100000000) {
+                        return (val / 100000000).toFixed(1) + '億';
+                    }
+                    if (val >= 10000) {
+                        return (val / 10000).toFixed(1) + '万';
+                    }
+                    return val.toLocaleString();
+                };
+
+                return {
+                    darkMode,
+                    sidebarOpen,
+                    showMobileSearch,
+                    currentView,
+                    activeMenu,
+                    selectedCategory,
+                    searchQuery,
+                    activeSearchQuery,
+                    toastMessage,
+                    showUploadModal,
+                    showNotifications,
+                    showProfileMenu,
+                    showSortMenu,
+                    activeVideo,
+                    showFullDesc,
+                    newCommentText,
+                    commentFocused,
+                    categories,
+                    subscribedChannels,
+                    unreadNotifications,
+                    notifications,
+                    videos,
+                    uploadForm,
+                    filteredVideos,
+                    recommendedVideos,
+                    toggleTheme,
+                    toggleSidebar,
+                    toggleMobileSearch,
+                    selectCategory,
+                    selectMenu,
+                    goHome,
+                    executeSearch,
+                    resetFilters,
+                    playVideo,
+                    toggleSubscribe,
+                    toggleLike,
+                    toggleDislike,
+                    showToast,
+                    copyVideoLink,
+                    saveToWatchLater,
+                    cancelComment,
+                    submitComment,
+                    likeComment,
+                    sortComments,
+                    openUploadModal,
+                    closeUploadModal,
+                    submitUpload,
+                    toggleNotifications,
+                    clearNotifications,
+                    toggleProfileMenu,
+                    formatViews,
+                    // 【新規】ログイン・管理者機能
+                    currentUserRole,
+                    showLoginModal,
+                    showCreateChannelModal,
+                    userChannel,
+                    channelForm,
+                    bannedChannels,
+                    viewLogs,
+                    allChannels,
+                    currentUserName,
+                    currentUserEmail,
+                    userAvatar,
+                    clearLogs,
+                    toggleBanChannel,
+                    isChannelBanned,
+                    deleteVideoAdmin,
+                    openLoginModal,
+                    selectRole,
+                    handleMyChannelClick,
+                    updateFormAvatar,
+                    submitCreateChannel,
+                    logoutDemo
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
